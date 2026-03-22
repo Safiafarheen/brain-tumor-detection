@@ -3,18 +3,12 @@ import cv2
 import numpy as np
 from tensorflow.keras.models import load_model
 import os
-import tensorflow as tf
 
 app = Flask(__name__)
 
-# Memory optimization - Load model ONCE
 print("🔄 Loading brain_model.h5...")
-gpus = tf.config.experimental.list_physical_devices('GPU')
-if gpus:
-    tf.config.experimental.set_memory_growth(gpus[0], True)
-
 model = load_model("brain_model.h5")
-print("✅ Model loaded successfully!")
+print("✅ Model loaded! Input shape:", model.input_shape)
 
 @app.route('/', methods=['GET'])
 def home():
@@ -24,9 +18,11 @@ def home():
 def predict():
     try:
         file = request.files['file']
-        image = cv2.imdecode(np.frombuffer(file.read(), np.uint8), cv2.IMREAD_COLOR)
-        image = cv2.resize(image, (150, 150))
-        image = np.expand_dims(image/255.0, axis=0)
+        # FIX 1: Grayscale + Resize to model's expected 64x64
+        image = cv2.imdecode(np.frombuffer(file.read(), np.uint8), cv2.IMREAD_GRAYSCALE)
+        image = cv2.resize(image, (64, 64))  # Model expects 64x64
+        image = image.reshape(1, 64, 64, 1)  # Add channel dim
+        image = image / 255.0
         
         prediction = model.predict(image, verbose=0)[0][0]
         result = "TUMOR" if prediction > 0.5 else "NO TUMOR"
@@ -34,11 +30,12 @@ def predict():
         
         return jsonify({
             "result": result,
-            "confidence": f"{confidence:.1%}"
+            "confidence": f"{confidence:.1%}",
+            "input_shape": str(image.shape)
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, threaded=True)
+    app.run(host='0.0.0.0', port=port)
