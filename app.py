@@ -3,6 +3,9 @@ import cv2
 import numpy as np
 from tensorflow.keras.models import load_model
 import os
+import io
+import base64
+from PIL import Image
 
 app = Flask(__name__)
 
@@ -16,23 +19,27 @@ def home():
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    """AI Brain Tumor Detection API"""
+    """AI Brain Tumor Detection API - RENDER FIXED"""
     try:
-        # Get uploaded file
+        # Get uploaded file - NO DISK SAVE!
         file = request.files["file"]
-        filepath = "temp.jpg"
-        file.save(filepath)
-
-        # Preprocess image
-        img = cv2.imread(filepath)
+        if file.filename == '':
+            return jsonify({"error": "No file"}), 400
+        
+        # Read image from memory (Render fix!)
+        image_data = file.read()
+        image = Image.open(io.BytesIO(image_data)).convert('RGB')
+        
+        # Preprocess (same as yours but PIL + cv2)
+        img = np.array(image)
         img = cv2.resize(img, (64, 64))
         img = img / 255.0
         img = np.reshape(img, (1, 64, 64, 3))
 
-        # AI Prediction
+        # AI Prediction (YOUR exact logic)
         prediction = model.predict(img, verbose=0)
 
-        # Binary classification
+        # YOUR exact result logic
         if prediction[0][0] > 0.5:
             result = "Tumor Detected"
             confidence = f"{float(prediction[0][0])*100:.1f}%"
@@ -40,13 +47,16 @@ def predict():
             result = "No Tumor"
             confidence = f"{float(1-prediction[0][0])*100:.1f}%"
 
-        # Cleanup
-        os.remove(filepath)
+        # Convert image to base64 for preview (Render compatible!)
+        buffered = io.BytesIO()
+        image.save(buffered, format="JPEG")
+        img_str = base64.b64encode(buffered.getvalue()).decode()
         
         return jsonify({
             "result": result,
             "confidence": confidence,
-            "status": "success"
+            "status": "success",
+            "image_b64": f"data:image/jpeg;base64,{img_str}"
         })
     
     except Exception as e:
