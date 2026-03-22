@@ -2,10 +2,15 @@ from flask import Flask, request, jsonify
 import cv2
 import numpy as np
 from tensorflow.keras.models import load_model
+import os
 
 app = Flask(__name__)
 
 model = load_model("brain_model.h5")
+
+@app.route('/', methods=['GET'])  # ← ADD THIS
+def home():
+    return {"status": "Brain Tumor Detection API LIVE", "endpoint": "/predict"}
 
 @app.route("/predict", methods=["POST"])
 def predict():
