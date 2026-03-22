@@ -3,9 +3,18 @@ import cv2
 import numpy as np
 from tensorflow.keras.models import load_model
 import os
+import tensorflow as tf
 
 app = Flask(__name__)
+
+# Memory optimization - Load model ONCE
+print("🔄 Loading brain_model.h5...")
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+    tf.config.experimental.set_memory_growth(gpus[0], True)
+
 model = load_model("brain_model.h5")
+print("✅ Model loaded successfully!")
 
 @app.route('/', methods=['GET'])
 def home():
@@ -14,37 +23,22 @@ def home():
 @app.route("/predict", methods=["POST"])
 def predict():
     try:
-        file = request.files["file"]
-        filepath = "temp.jpg"
-        file.save(filepath)
+        file = request.files['file']
+        image = cv2.imdecode(np.frombuffer(file.read(), np.uint8), cv2.IMREAD_COLOR)
+        image = cv2.resize(image, (150, 150))
+        image = np.expand_dims(image/255.0, axis=0)
         
-        img = cv2.imread(filepath)
-        img = cv2.resize(img, (64, 64))
-        img = img / 255.0
-        img = np.reshape(img, (1, 64, 64, 3))
-
-        prediction = model.predict(img, verbose=0)
+        prediction = model.predict(image, verbose=0)[0][0]
+        result = "TUMOR" if prediction > 0.5 else "NO TUMOR"
+        confidence = float(prediction if prediction > 0.5 else 1-prediction)
         
-        if prediction[0][0] > 0.5:
-            result = "Tumor Detected"
-            confidence = f"{float(prediction[0][0])*100:.1f}%"
-        else:
-            result = "No Tumor"
-            confidence = f"{float(1-prediction[0][0])*100:.1f}%"
-
-        os.remove(filepath)
         return jsonify({
             "result": result,
-            "confidence": confidence,
-            "status": "success"
+            "confidence": f"{confidence:.1%}"
         })
     except Exception as e:
-        return jsonify({
-            "result": "Error",
-            "error": str(e),
-            "status": "error"
-        })
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    app.run(host='0.0.0.0', port=port, threaded=True)
