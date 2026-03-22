@@ -18,11 +18,14 @@ def home():
 def predict():
     try:
         file = request.files['file']
-        # FIX 1: Grayscale + Resize to model's expected 64x64
-        image = cv2.imdecode(np.frombuffer(file.read(), np.uint8), cv2.IMREAD_GRAYSCALE)
-        image = cv2.resize(image, (64, 64))  # Model expects 64x64
-        image = image.reshape(1, 64, 64, 1)  # Add channel dim
-        image = image / 255.0
+        
+        # ✅ FIX: COLOR image (3 channels) + 64x64 resize
+        image = cv2.imdecode(np.frombuffer(file.read(), np.uint8), cv2.IMREAD_COLOR)
+        image = cv2.resize(image, (64, 64))  # Model expects 64x64x3
+        image = image / 255.0  # Normalize
+        image = np.expand_dims(image, axis=0)  # Add batch dimension
+        
+        print(f"✅ Input shape: {image.shape}")  # Debug
         
         prediction = model.predict(image, verbose=0)[0][0]
         result = "TUMOR" if prediction > 0.5 else "NO TUMOR"
